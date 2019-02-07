@@ -189,7 +189,8 @@ class LDAModelObject:
 
         num_topics_list = list(range(*num_topics_range))
         logging.info(f"build an optimized LDA model among num_topics = {num_topics_list}")
-        logging.disable()
+        logger = logging.getLogger()
+        logger.disabled = True
         for num_topics in num_topics_list:
             model = gensim.models.ldamodel.LdaModel(corpus=self.txt_obj.corpus,
                                                     id2word=self.txt_obj.id2word,
@@ -203,7 +204,7 @@ class LDAModelObject:
             coherence = self.get_coherence(model, self.txt_obj)
             model_list.append(model)
             coherence_list.append(coherence)
-        logging.enable()
+        logger.disabled = False
 
         logging.info(f"(num_topic, coherence) = {[i for i in zip(num_topic_list, coherence_list)]}")
         idx = np.argmax(coherence_list)
@@ -284,9 +285,9 @@ if __name__ == "__main__":
 
     #visualize(m, t)
 
-    df_topic_sents_keywords = format_topics_sentences(ldamodel=optimal_model, corpus=corpus, texts=data)
-    df_dominant_topic = df_topic_sents_keywords.reset_index()
-    df_dominant_topic.columns = ['Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords', 'Text']
-    df_dominant_topic.head(10)
+    #df = m.format_topics_sentences(texts=data)
+    #df_dominant_topic = df.reset_index()
+    #df_dominant_topic.columns = ['Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords', 'Text']
+    #df_dominant_topic.head(10)
 
 
