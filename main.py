@@ -189,8 +189,7 @@ class LDAModelObject:
 
         num_topics_list = list(range(*num_topics_range))
         logging.info(f"build an optimized LDA model among num_topics = {num_topics_list}")
-        logger = logging.getLogger()
-        logger.disabled = True
+        logging.disable(logging.CRITICAL)
         for num_topics in num_topics_list:
             model = gensim.models.ldamodel.LdaModel(corpus=self.txt_obj.corpus,
                                                     id2word=self.txt_obj.id2word,
@@ -204,7 +203,7 @@ class LDAModelObject:
             coherence = self.get_coherence(model, self.txt_obj)
             model_list.append(model)
             coherence_list.append(coherence)
-        logger.disabled = False
+        logging.disable(logging.NOTSET)
 
         logging.info(f"(num_topic, coherence) = {[i for i in zip(num_topic_list, coherence_list)]}")
         idx = np.argmax(coherence_list)
