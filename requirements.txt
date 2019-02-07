@@ -1,0 +1,6 @@
+gensim
+nltk
+spacy
+pattern3
+pyLDAvis
+ipython
