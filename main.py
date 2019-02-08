@@ -2,15 +2,12 @@ from pathlib import Path
 import logging
 import pickle
 
-import pandas as pd
 from sklearn.datasets import fetch_20newsgroups
-import numpy as np
 import gensim
 from gensim.summarization.textcleaner import clean_text_by_sentences, clean_text_by_word
 
+from lda_model import LDAModelObject, LDAMalletModelObject
 from utils import check_dir
-
-logging.basicConfig(format="%(asctime)s [%(levelname)-5s] %(message)s", level=logging.INFO)
 
 
 class TextObject:
@@ -175,97 +172,6 @@ class TextObject:
         return out
 
 
-class LDAModelObject:
-
-    def __init__(self, model_name, txt_obj, model_dir="./models"):
-        self.model_path = Path(model_dir, model_name)
-        self.txt_obj = txt_obj
-
-        if not self.model_path.exists():
-            check_dir(model_dir)
-            self.model = self.build_model()
-            self.save()
-        else:
-            self.model = self.load()
-
-        self.data_frame = self.format_topics()
-
-    def build_model(self, num_topics_range=(5, 40, 5)):
-        coherence_list = []
-        model_list = []
-
-        num_topics_list = list(range(*num_topics_range))
-        logging.info(f"build an optimized LDA model among num_topics = {num_topics_list}")
-        logging.disable(logging.CRITICAL)
-        for num_topics in num_topics_list:
-            model = gensim.models.ldamodel.LdaModel(corpus=self.txt_obj.corpus,
-                                                    id2word=self.txt_obj.id2word,
-                                                    num_topics=num_topics,
-                                                    random_state=100,
-                                                    update_every=1,
-                                                    chunksize=100,
-                                                    passes=10,
-                                                    alpha='auto',
-                                                    per_word_topics=True)
-            coherence = self.get_coherence(model, self.txt_obj)
-            model_list.append(model)
-            coherence_list.append(coherence)
-        logging.disable(logging.NOTSET)
-
-        logging.info(f"(num_topic, coherence) = {[i for i in zip(num_topics_list, coherence_list)]}")
-        idx = np.argmax(coherence_list)
-        logging.info(f"Max coherence score = {coherence_list[idx]} at num_topics = {num_topics_list[idx]}")
-        return model_list[idx]
-
-    def show_model_performance(self):
-        perplexity = self.get_perplexity(self.model, self.txt_obj)
-        logging.info(f"perplexity: {perplexity}")
-        coherence_score = self.get_coherence(self.model, self.txt_obj)
-        logging.info(f"coherence score: {coherence_score}")
-
-    def get_perplexity(self, model, txt_obj):
-        # a measure of how good the model is. lower the better.
-        return model.log_perplexity(txt_obj.corpus)
-
-    def get_coherence(self, model, txt_obj):
-        # a measure of how good the model is. higher the better.
-        coherence_model = gensim.models.CoherenceModel(model=model, texts=txt_obj.words, dictionary=txt_obj.id2word, coherence='c_v')
-        return coherence_model.get_coherence()
-
-    def save(self):
-        self.model.save(str(self.model_path))
-
-    def load(self):
-        return gensim.models.ldamodel.LdaModel.load(str(self.model_path))
-
-    def format_topics(self):
-        data_frame = pd.DataFrame()
-        for i, row in enumerate(self.model[self.txt_obj.corpus]):
-            row = sorted(row[0], key=lambda x: (x[1]), reverse=True)
-            # Get the Dominant topic, Perc Contribution and Keywords for each document
-            for j, (topic_num, prop_topic) in enumerate(row):
-                if j == 0:  # => dominant topic
-                    wp = self.model.show_topic(topic_num)
-                    topic_keywords = ", ".join([word for word, prop in self.model.show_topic(topic_num)])
-                    data_frame = data_frame.append(pd.Series([int(topic_num), round(prop_topic,4), topic_keywords]), ignore_index=True)
-                else:
-                    break
-        # append docs column
-        contents = pd.Series(self.txt_obj.docs)
-        data_frame = pd.concat([data_frame, contents], axis=1)
-        data_frame = data_frame.reset_index()
-        data_frame.columns = ['Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords', 'Text']
-        print(data_frame.head(1))
-
-    def query_docs(self, new_txt_obj, update=False):
-        # Get main topic in each document
-        breakpoint()
-        # Add original text to the end of the output
-        contents = pd.Series(self.txt_obj.texts)
-        data_frame = pd.concat([data_frame, contents], axis=1)
-        return data_frame
-
-
 def visualize(model_obj, txt_obj):
     import pyLDAvis
     import pyLDAvis.gensim
@@ -293,8 +199,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     t = TextObject(args.data_dir)  # 20_newsgroup dataset in default
-    m = LDAModelObject(args.model, t)
+    m = LDAMalletModelObject(args.model, t)
 
     #visualize(m, t)
-    breakpoint()
+    result = m.query_topic(t.corpus[:10], t.docs[:10])
+
+    from pprint import pprint
+    pprint(result)
 

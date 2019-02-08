@@ -109,4 +109,4 @@ models/
 
 # files to ignore
 test.py
-
+*.jpg

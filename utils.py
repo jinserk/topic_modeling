@@ -1,5 +1,9 @@
 import sys
 from pathlib import Path
+import logging
+
+
+logging.basicConfig(format="%(asctime)s [%(levelname)-5s] %(message)s", level=logging.INFO)
 
 
 def check_dir(dir_path):
