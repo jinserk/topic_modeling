@@ -17,11 +17,11 @@ class TextObject:
 
     def __init__(self, data_dir='./data', dataset='train'):
         self.data_path = Path(data_dir, dataset)
-        self.words_file = self.data_path.joinpath(f"20newsgroups_{dataset}.pkl")
+        self.texts_file = self.data_path.joinpath(f"20newsgroups_{dataset}.pkl")
         self.id2word_file = self.data_path.joinpath(f"20newsgroups_{dataset}.txt")
         self.corpus_file = self.data_path.joinpath(f"20newsgroups_{dataset}.mm")
 
-        if self.words_file.exists() and self.id2word_file.exists() and self.corpus_file.exists():
+        if self.texts_file.exists() and self.id2word_file.exists() and self.corpus_file.exists():
             self.load()
         else:
             self.docs = fetch_20newsgroups(subset=dataset, remove=('headers', 'footers', 'quotes')).data
@@ -34,15 +34,18 @@ class TextObject:
             self.save()
 
     def load(self):
-        with self.words_file.open('rb') as f:
-            self.words = pickle.load(f)
+        with self.texts_file.open('rb') as f:
+            texts = pickle.load(f)
+            self.docs  = texts['docs']
+            self.words = texts['words']
         self.id2word = gensim.corpora.Dictionary.load_from_text(str(self.id2word_file))
         self.corpus = gensim.corpora.MmCorpus(str(self.corpus_file))
 
     def save(self):
         check_dir(self.data_path)
-        with self.words_file.open('wb') as f:
-            pickle.dump(self.words, f, protocol=pickle.HIGHEST_PROTOCOL)
+        texts = { 'docs': self.docs, 'words': self.words }
+        with self.texts_file.open('wb') as f:
+            pickle.dump(texts, f, protocol=pickle.HIGHEST_PROTOCOL)
         self.id2word.save_as_text(str(self.id2word_file))
         gensim.corpora.MmCorpus.serialize(str(self.corpus_file), self.corpus, metadata=True)
 
@@ -59,6 +62,8 @@ class TextObject:
         docs = [re.sub('\S*@\S*\s?', '', doc) for doc in docs]  # remove Emails
         docs = [re.sub('\s+', ' ', doc) for doc in docs]        # Remove new line characters
         docs = [re.sub("\'", "", doc) for doc in docs]          # Remove distracting single quotes
+
+        self.docs = docs
 
         # apply gensim's simple_preprocess
         def clean_up_and_tokenize(docs):
@@ -183,6 +188,8 @@ class LDAModelObject:
         else:
             self.model = self.load()
 
+        self.data_frame = self.format_topics()
+
     def build_model(self, num_topics_range=(5, 40, 5)):
         coherence_list = []
         model_list = []
@@ -205,7 +212,7 @@ class LDAModelObject:
             coherence_list.append(coherence)
         logging.disable(logging.NOTSET)
 
-        logging.info(f"(num_topic, coherence) = {[i for i in zip(num_topic_list, coherence_list)]}")
+        logging.info(f"(num_topic, coherence) = {[i for i in zip(num_topics_list, coherence_list)]}")
         idx = np.argmax(coherence_list)
         logging.info(f"Max coherence score = {coherence_list[idx]} at num_topics = {num_topics_list[idx]}")
         return model_list[idx]
@@ -231,26 +238,32 @@ class LDAModelObject:
     def load(self):
         return gensim.models.ldamodel.LdaModel.load(str(self.model_path))
 
-    def format_topics_sentences(texts):
+    def format_topics(self):
         data_frame = pd.DataFrame()
-        # Get main topic in each document
         for i, row in enumerate(self.model[self.txt_obj.corpus]):
-            row = sorted(row, key=lambda x: (x[1]), reverse=True)
+            row = sorted(row[0], key=lambda x: (x[1]), reverse=True)
             # Get the Dominant topic, Perc Contribution and Keywords for each document
             for j, (topic_num, prop_topic) in enumerate(row):
                 if j == 0:  # => dominant topic
                     wp = self.model.show_topic(topic_num)
                     topic_keywords = ", ".join([word for word, prop in self.model.show_topic(topic_num)])
-                    sent_topics_df = sent_topics_df.append(pd.Series([int(topic_num), round(prop_topic,4), topic_keywords]), ignore_index=True)
+                    data_frame = data_frame.append(pd.Series([int(topic_num), round(prop_topic,4), topic_keywords]), ignore_index=True)
                 else:
                     break
-        sent_topics_df.columns = ['Dominant_Topic', 'Perc_Contribution', 'Topic_Keywords']
+        # append docs column
+        contents = pd.Series(self.txt_obj.docs)
+        data_frame = pd.concat([data_frame, contents], axis=1)
+        data_frame = data_frame.reset_index()
+        data_frame.columns = ['Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords', 'Text']
+        print(data_frame.head(1))
 
+    def query_docs(self, new_txt_obj, update=False):
+        # Get main topic in each document
+        breakpoint()
         # Add original text to the end of the output
-        contents = pd.Series(texts)
-        sent_topics_df = pd.concat([sent_topics_df, contents], axis=1)
-        return(sent_topics_df)
-
+        contents = pd.Series(self.txt_obj.texts)
+        data_frame = pd.concat([data_frame, contents], axis=1)
+        return data_frame
 
 
 def visualize(model_obj, txt_obj):
@@ -283,10 +296,5 @@ if __name__ == "__main__":
     m = LDAModelObject(args.model, t)
 
     #visualize(m, t)
-
-    #df = m.format_topics_sentences(texts=data)
-    #df_dominant_topic = df.reset_index()
-    #df_dominant_topic.columns = ['Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords', 'Text']
-    #df_dominant_topic.head(10)
-
+    breakpoint()
 
