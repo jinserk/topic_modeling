@@ -4,3 +4,5 @@ spacy
 pattern3
 pyLDAvis
 ipython
+pandas
+xlrd

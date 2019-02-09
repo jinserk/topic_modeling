@@ -88,11 +88,23 @@ class LDAModelObject:
 class LDAMalletModelObject(LDAModelObject):
 
     def __init__(self, model_name, txt_obj, model_dir="./models"):
-        super().__init__(model_name, txt_obj, model_dir)
+        #super().__init__(model_name, txt_obj, model_dir)
         self.mallet_path = Path("./mallet/bin/mallet")
         if not self.mallet_path.exists():
             logging.error("no mallet model exists. please download and install it first")
             sys.exit(1)
+
+        self.model_path = Path(model_dir, model_name)
+        self.txt_obj = txt_obj
+
+        if not self.model_path.exists():
+            check_dir(self.model_path)
+            self.model = self.build_mallet_model()
+            self.save(model_name)
+        else:
+            self.model = self.load(model_name)
+
+        #self.data_frame = self.format_topics()
 
     def build_mallet_model(self, num_topics_range=(10, 100, 10)):
         """ using LDA MALLET model

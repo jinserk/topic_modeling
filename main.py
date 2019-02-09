@@ -2,6 +2,7 @@ from pathlib import Path
 import logging
 import pickle
 
+import pandas as pd
 from sklearn.datasets import fetch_20newsgroups
 import gensim
 from gensim.models import KeyedVectors
@@ -15,24 +16,22 @@ class TextObject:
 
     def __init__(self, data_dir='./data', dataset='train'):
         self.data_path = Path(data_dir, dataset)
-        self.texts_file = self.data_path.joinpath(f"20newsgroups_{dataset}.pkl")
+        self.text_file = self.data_path.joinpath(f"20newsgroups_{dataset}.pkl")
         self.id2word_file = self.data_path.joinpath(f"20newsgroups_{dataset}.txt")
         self.corpus_file = self.data_path.joinpath(f"20newsgroups_{dataset}.mm")
 
-        if self.texts_file.exists() and self.id2word_file.exists() and self.corpus_file.exists():
+        if self.text_file.exists() and self.id2word_file.exists() and self.corpus_file.exists():
             self.load()
         else:
             self.docs = fetch_20newsgroups(subset=dataset, remove=('headers', 'footers', 'quotes')).data
-            logging.info("cleaning up texts ...")
             self.words = self.get_preprocessed_words0(self.docs)
             #self.words = self.get_preprocessed_words1(self.docs)
             #self.words = self.get_preprocessed_words2(self.docs)
-            logging.info("building id2word and corpus ...")
             self.id2word, self.corpus = self.build_corpus(self.words)
             self.save()
 
     def load(self):
-        with self.texts_file.open('rb') as f:
+        with self.text_file.open('rb') as f:
             texts = pickle.load(f)
             self.docs  = texts['docs']
             self.words = texts['words']
@@ -42,12 +41,13 @@ class TextObject:
     def save(self):
         check_dir(self.data_path)
         texts = { 'docs': self.docs, 'words': self.words }
-        with self.texts_file.open('wb') as f:
+        with self.text_file.open('wb') as f:
             pickle.dump(texts, f, protocol=pickle.HIGHEST_PROTOCOL)
         self.id2word.save_as_text(str(self.id2word_file))
         gensim.corpora.MmCorpus.serialize(str(self.corpus_file), self.corpus, metadata=True)
 
     def build_corpus(self, words):
+        logging.info("building id2word and corpus ...")
         id2word = gensim.corpora.Dictionary(words)
         corpus = [id2word.doc2bow(text) for text in words]
         return id2word, corpus
@@ -57,11 +57,9 @@ class TextObject:
 
         # clean up text
         import re
-        docs = [re.sub('\S*@\S*\s?', '', doc) for doc in docs]  # remove Emails
-        docs = [re.sub('\s+', ' ', doc) for doc in docs]        # Remove new line characters
-        docs = [re.sub("\'", "", doc) for doc in docs]          # Remove distracting single quotes
-
-        self.docs = docs
+        docs = [re.sub('\s+', ' ', doc) for doc in docs]                # Remove new line characters
+        docs = [re.sub('\S*@\S*\s?', '', doc) for doc in docs]          # remove Emails
+        docs = [re.sub("\'", "", doc) for doc in docs]                  # Remove distracting single quotes
 
         # apply gensim's simple_preprocess
         def clean_up_and_tokenize(docs):
@@ -185,12 +183,84 @@ class MedicalWord2Vec:
     ]
 
     def __init__(self, data_dir = './data/w2v'):
-        self.w2v_file = self.w2v_files[2]
+        self.w2v_file = self.w2v_files[4]
         self.w2v_path = Path(data_dir, self.w2v_file)
         if not self.w2v_path.exists():
             download_file(self.base_url, self.w2v_file, data_dir)
 
         self.w2v_model = KeyedVectors.load_word2vec_format(self.w2v_path, binary=True)
+
+
+class EDWDataset(TextObject):
+
+    src_dir = "/media/samba_share/data/pds/"
+
+    def __init__(self, data_dir="./data/edw_sample"):
+        self.data_path = Path(data_dir)
+        self.text_file = self.data_path.joinpath(f"edw_sample.pkl")
+        self.id2word_file = self.data_path.joinpath(f"edw_sample.txt")
+        self.corpus_file = self.data_path.joinpath(f"edw_sample.mm")
+
+        if self.text_file.exists() and self.id2word_file.exists() and self.corpus_file.exists():
+            self.load()
+        else:
+            self.docs = self.fetch_visit_note()
+            self.words = self.get_preprocessed_words(self.docs)
+            self.id2word, self.corpus = self.build_corpus(self.words)
+            self.save()
+
+    def fetch_visit_note(self):
+        src_path = Path(self.src_dir)
+        if not src_path.exists():
+            logging.error(f"error to open {self.src_dir}. check the mount status.")
+            sys.exit(1)
+
+        df = pd.DataFrame()
+        for xlsx_file in src_path.rglob("sample*.xlsx"):
+            tmp = pd.read_excel(xlsx_file, index_col=2)
+            df = df.append(tmp, sort=False)
+
+        return df["contents"].dropna().tolist()
+
+    def get_preprocessed_words(self, docs):
+        logging.info(f"original text:\n{docs[0]}")
+
+        # clean up text
+        import re
+        tmp_docs = []
+        for doc in docs:
+            try:
+                doc = gensim.parsing.preprocessing.strip_tags(doc)
+                doc = gensim.parsing.preprocessing.strip_multiple_whitespaces(doc)
+                doc = gensim.parsing.preprocessing.strip_non_alphanum(doc)
+                doc = gensim.parsing.preprocessing.strip_numeric(doc)
+                doc = gensim.parsing.preprocessing.strip_short(doc)
+                #doc = re.sub('\s+', ' ', doc)           # Remove new line characters
+                doc = re.sub('\S*@\S*\s?', '', doc)     # remove Emails
+                doc = re.sub("\'", "", doc)             # Remove distracting single quotes
+                tmp_docs.append(doc)
+            except:
+                print(doc)
+                breakpoint()
+        logging.info(f"cleanup text:\n{tmp_docs[0]}")
+
+        # apply gensim's simple_preprocess
+        def clean_up_and_tokenize(docs):
+            for doc in docs:
+                yield gensim.utils.simple_preprocess(doc, deacc=True)   # deacc=True removes punctuations
+        words = list(clean_up_and_tokenize(tmp_docs))
+        logging.info(f"words list after simple preprocesing:\n{words[0]}")
+
+        self.prepare_stopwords()
+        self.prepare_ngram(words)
+
+        words = self.remove_stopwords(words)
+        words = self.make_bigrams(words)
+        words = self.lemmatize(words)
+
+        logging.info(f"words list after overall cleanup:\n{words[0]}")
+        return words
+
 
 
 def visualize(model_obj, txt_obj):
@@ -219,7 +289,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', default='my_lda', type=str, help="model file name in model directory")
     args = parser.parse_args()
 
-    if False:
+    if True:
         t = TextObject(args.data_dir)  # 20_newsgroup dataset in default
         m = LDAMalletModelObject(args.model, t)
 
@@ -228,6 +298,7 @@ if __name__ == "__main__":
 
         from pprint import pprint
         pprint(result)
-
     else:
-        c = MedicalWord2Vec()
+        #c = MedicalWord2Vec()
+        v = EDWDataset()
+
