@@ -4,10 +4,11 @@ import pickle
 
 from sklearn.datasets import fetch_20newsgroups
 import gensim
+from gensim.models import KeyedVectors
 from gensim.summarization.textcleaner import clean_text_by_sentences, clean_text_by_word
 
 from lda_model import LDAModelObject, LDAMalletModelObject
-from utils import check_dir
+from utils import check_dir, download_file
 
 
 class TextObject:
@@ -172,6 +173,26 @@ class TextObject:
         return out
 
 
+class MedicalWord2Vec:
+
+    base_url = "http://evexdb.org/pmresources/vec-space-models/"
+    w2v_files = [
+        'PMC-w2v.bin',
+        'PubMed-and-PMC-ri.tar.gz',
+        'PubMed-and-PMC-w2v.bin',
+        'PubMed-w2v.bin',
+        'wikipedia-pubmed-and-PMC-w2v.bin',
+    ]
+
+    def __init__(self, data_dir = './data/w2v'):
+        self.w2v_file = self.w2v_files[2]
+        self.w2v_path = Path(data_dir, self.w2v_file)
+        if not self.w2v_path.exists():
+            download_file(self.base_url, self.w2v_file, data_dir)
+
+        self.w2v_model = KeyedVectors.load_word2vec_format(self.w2v_path, binary=True)
+
+
 def visualize(model_obj, txt_obj):
     import pyLDAvis
     import pyLDAvis.gensim
@@ -198,12 +219,15 @@ if __name__ == "__main__":
     parser.add_argument('--model', default='my_lda', type=str, help="model file name in model directory")
     args = parser.parse_args()
 
-    t = TextObject(args.data_dir)  # 20_newsgroup dataset in default
-    m = LDAMalletModelObject(args.model, t)
+    if False:
+        t = TextObject(args.data_dir)  # 20_newsgroup dataset in default
+        m = LDAMalletModelObject(args.model, t)
 
-    #visualize(m, t)
-    result = m.query_topic(t.corpus[:10], t.docs[:10])
+        #visualize(m, t)
+        result = m.query_topic(t.corpus[:10], t.docs[:10])
 
-    from pprint import pprint
-    pprint(result)
+        from pprint import pprint
+        pprint(result)
 
+    else:
+        c = MedicalWord2Vec()

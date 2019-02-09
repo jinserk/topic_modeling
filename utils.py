@@ -27,11 +27,15 @@ def download_file(base_url, target_file, target_dir):
     check_dir(target_dir)
     target_file_path = Path(target_dir, target_file)
     if not target_file_path.exists():
-        print(f"downloading {target_file} ...")
-        import urllib.parse
-        import urllib.request
-        full_url = urllib.parse.urljoin(base_url, target_file)
-        urllib.request.urlretrieve(full_url, str(target_file_path), reporthook=reporthook)
+        try:
+            print(f"downloading {target_file} ...")
+            import urllib.parse
+            import urllib.request
+            full_url = urllib.parse.urljoin(base_url, target_file)
+            urllib.request.urlretrieve(full_url, str(target_file_path), reporthook=reporthook)
+        except:
+            logging.error("download failed.")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
