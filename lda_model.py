@@ -150,11 +150,20 @@ class LDAMalletModelObject(LDAModelObject):
         # txt_obj.corpus should be a list of word list
         topics = [sorted(i, key=lambda x: x[1], reverse=True)[0]
                   for i in self.model[corpus]]
-        tmp = []
+        df = pd.DataFrame()
         for i, (topic_num, prop_topic) in enumerate(topics):
             topic_keywords = self.model.show_topic(topic_num)
-            tmp.append((topic_num, prop_topic, topic_keywords, docs[i]))
-        return tmp
+            df = df.append(pd.Series([docs[i], topic_num, prop_topic,
+                                      ', '.join([k for k, v in topic_keywords])]),
+                           ignore_index=True)
+        df.columns = ['Docs', 'Topic', 'Topic Prob', 'Keywords']
+        return df
+
+    def export_to_excel(self, result, file_name):
+        df = pd.DataFrame.from_dict(result)
+        df.to_excel(file_name)
+
+
 
 
 def visualize(model_obj, txt_obj):

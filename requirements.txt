@@ -6,3 +6,4 @@ pyLDAvis
 ipython
 pandas
 xlrd
+xlwt

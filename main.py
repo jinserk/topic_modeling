@@ -295,9 +295,7 @@ if __name__ == "__main__":
 
         #visualize(m, t)
         result = m.query_topic(t.corpus[:10], t.docs[:10])
-
-        from pprint import pprint
-        pprint(result)
+        m.export_to_excel(result, "20newsgroup_result.xls")
     else:
         #c = MedicalWord2Vec()
         v = EDWDataset()
