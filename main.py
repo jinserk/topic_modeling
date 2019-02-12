@@ -171,98 +171,6 @@ class TextObject:
         return out
 
 
-class MedicalWord2Vec:
-
-    base_url = "http://evexdb.org/pmresources/vec-space-models/"
-    w2v_files = [
-        'PMC-w2v.bin',
-        'PubMed-and-PMC-ri.tar.gz',
-        'PubMed-and-PMC-w2v.bin',
-        'PubMed-w2v.bin',
-        'wikipedia-pubmed-and-PMC-w2v.bin',
-    ]
-
-    def __init__(self, data_dir = './data/w2v'):
-        self.w2v_file = self.w2v_files[4]
-        self.w2v_path = Path(data_dir, self.w2v_file)
-        if not self.w2v_path.exists():
-            download_file(self.base_url, self.w2v_file, data_dir)
-
-        self.w2v_model = KeyedVectors.load_word2vec_format(self.w2v_path, binary=True)
-
-
-class EDWDataset(TextObject):
-
-    src_dir = "/media/samba_share/data/pds/"
-
-    def __init__(self, data_dir="./data/edw_sample"):
-        self.data_path = Path(data_dir)
-        self.text_file = self.data_path.joinpath(f"edw_sample.pkl")
-        self.id2word_file = self.data_path.joinpath(f"edw_sample.txt")
-        self.corpus_file = self.data_path.joinpath(f"edw_sample.mm")
-
-        if self.text_file.exists() and self.id2word_file.exists() and self.corpus_file.exists():
-            self.load()
-        else:
-            self.docs = self.fetch_visit_note()
-            self.words = self.get_preprocessed_words(self.docs)
-            self.id2word, self.corpus = self.build_corpus(self.words)
-            self.save()
-
-    def fetch_visit_note(self):
-        src_path = Path(self.src_dir)
-        if not src_path.exists():
-            logging.error(f"error to open {self.src_dir}. check the mount status.")
-            sys.exit(1)
-
-        df = pd.DataFrame()
-        for xlsx_file in src_path.rglob("sample*.xlsx"):
-            tmp = pd.read_excel(xlsx_file, index_col=2)
-            df = df.append(tmp, sort=False)
-
-        return df["contents"].dropna().tolist()
-
-    def get_preprocessed_words(self, docs):
-        logging.info(f"original text:\n{docs[0]}")
-
-        # clean up text
-        import re
-        tmp_docs = []
-        for doc in docs:
-            try:
-                doc = gensim.parsing.preprocessing.strip_tags(doc)
-                doc = gensim.parsing.preprocessing.strip_multiple_whitespaces(doc)
-                doc = gensim.parsing.preprocessing.strip_non_alphanum(doc)
-                doc = gensim.parsing.preprocessing.strip_numeric(doc)
-                doc = gensim.parsing.preprocessing.strip_short(doc)
-                #doc = re.sub('\s+', ' ', doc)           # Remove new line characters
-                doc = re.sub('\S*@\S*\s?', '', doc)     # remove Emails
-                doc = re.sub("\'", "", doc)             # Remove distracting single quotes
-                tmp_docs.append(doc)
-            except:
-                print(doc)
-                breakpoint()
-        logging.info(f"cleanup text:\n{tmp_docs[0]}")
-
-        # apply gensim's simple_preprocess
-        def clean_up_and_tokenize(docs):
-            for doc in docs:
-                yield gensim.utils.simple_preprocess(doc, deacc=True)   # deacc=True removes punctuations
-        words = list(clean_up_and_tokenize(tmp_docs))
-        logging.info(f"words list after simple preprocesing:\n{words[0]}")
-
-        self.prepare_stopwords()
-        self.prepare_ngram(words)
-
-        words = self.remove_stopwords(words)
-        words = self.make_bigrams(words)
-        words = self.lemmatize(words)
-
-        logging.info(f"words list after overall cleanup:\n{words[0]}")
-        return words
-
-
-
 def visualize(model_obj, txt_obj):
     import pyLDAvis
     import pyLDAvis.gensim
@@ -289,14 +197,10 @@ if __name__ == "__main__":
     parser.add_argument('--model', default='my_lda', type=str, help="model file name in model directory")
     args = parser.parse_args()
 
-    if True:
-        t = TextObject(args.data_dir)  # 20_newsgroup dataset in default
-        m = LDAMalletModelObject(args.model, t)
+    t = TextObject(args.data_dir)  # 20_newsgroup dataset in default
+    m = LDAMalletModelObject(args.model, t)
 
-        #visualize(m, t)
-        result = m.query_topic(t.corpus[:10], t.docs[:10])
-        m.export_to_excel(result, "20newsgroup_result.xls")
-    else:
-        #c = MedicalWord2Vec()
-        v = EDWDataset()
+    #visualize(m, t)
+    result = m.query_topic(t.corpus[:10], t.docs[:10])
+    m.export_to_excel(result, "20newsgroup_result.xls")
 
